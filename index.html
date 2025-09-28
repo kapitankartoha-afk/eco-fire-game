@@ -3,233 +3,267 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Eco Fire — прототип</title>
+  <title>Eco Fire — оновлений прототип</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <style>
-    html,body { height:100%; margin:0; font-family:Inter, system-ui, Arial; background: linear-gradient(#89c2ff, #e6f7ff); }
-    #game-container { width:100%; height:100vh; display:flex; align-items:center; justify-content:center; }
-    canvas { display:block; }
+    :root{--glass: rgba(255,255,255,0.85); --accent:#2b8aef}
+    html,body { height:100%; margin:0; font-family:Inter, system-ui, Arial; background: linear-gradient(180deg,#88c2a6 0%, #e6f7ff 100%); }
+    #game-container { width:100%; height:100vh; display:flex; align-items:center; justify-content:center; position:relative; }
+    canvas { display:block; border-radius:16px; box-shadow:0 12px 40px rgba(10,20,30,0.15); }
 
-    /* HUD overlay */
-    .hud { position: absolute; right:18px; top:18px; width:260px; background: rgba(255,255,255,0.9); border-radius:12px; padding:12px; box-shadow:0 8px 30px rgba(0,0,0,0.12); }
-    .hud h3 { margin:6px 0 8px; font-size:16px; }
-    .fuel-list { display:flex; flex-direction:column; gap:6px; max-height:240px; overflow:auto; }
-    .fuel-btn { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-radius:8px; cursor:pointer; border:1px solid rgba(0,0,0,0.06); background:#fff; }
+    /* HUD */
+    .panel { position:absolute; right:18px; top:18px; width:300px; background:var(--glass); border-radius:12px; padding:12px; box-shadow:0 8px 30px rgba(0,0,0,0.12); }
+    .panel h3{margin:0 0 8px 0}
+    .fuel-list { display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
+    .fuel-item { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-radius:8px; cursor:pointer; border:1px solid rgba(0,0,0,0.06); background:#fff; }
     .controls { margin-top:10px; display:flex; gap:8px; }
-    button.primary { background:#2b8aef; color:#fff; padding:8px 10px; border-radius:8px; border:none; cursor:pointer; }
+    button.primary { background:var(--accent); color:#fff; padding:8px 10px; border-radius:8px; border:none; cursor:pointer; }
     button.ghost { background:transparent; border:1px solid rgba(0,0,0,0.08); padding:8px 10px; border-radius:8px; cursor:pointer; }
     .stat { margin-top:10px; font-size:14px; }
-    .scale { position:absolute; left:18px; top:18px; width:140px; background: rgba(255,255,255,0.85); border-radius:12px; padding:10px; box-shadow:0 6px 24px rgba(0,0,0,0.08); }
+
+    /* bottom bar with ignite button */
+    .bottom-bar { position:absolute; left:50%; transform:translateX(-50%); bottom:28px; background:var(--glass); padding:10px 14px; border-radius:999px; display:flex; gap:10px; align-items:center; box-shadow:0 10px 30px rgba(0,0,0,0.12); }
+    .ignite { background:#e74c3c; color:#fff; border:none; padding:10px 18px; border-radius:999px; cursor:pointer; font-weight:700 }
+
+    /* side markers */
+    .scale { position:absolute; left:18px; top:18px; width:220px; background:var(--glass); border-radius:12px; padding:10px; box-shadow:0 6px 24px rgba(0,0,0,0.08); }
     .scale .marker { font-size:13px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; }
-    .marker .bar { height:8px; width:40px; background:#eee; border-radius:4px; margin-left:8px; }
     .marker.high { font-weight:700; color:#c0392b; }
+
+    /* modal-like fuel picker (desktop) */
+    .picker { position:absolute; left:50%; transform:translateX(-50%); top:60px; background:var(--glass); width:360px; border-radius:12px; padding:12px; display:none; box-shadow:0 18px 40px rgba(0,0,0,0.18); }
+    .picker.open{ display:block }
+    .picker h4{margin:0 0 8px}
+    .picker .available { display:flex; gap:8px; flex-wrap:wrap }
+    .chip{ padding:8px 10px; background:#fff; border-radius:10px; border:1px solid rgba(0,0,0,0.06); cursor:pointer }
+    .picker .added { margin-top:10px }
+
     /* small help */
-    .help { position:absolute; left:18px; bottom:18px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.06); }
+    .help { position:absolute; right:18px; bottom:18px; background:var(--glass); padding:8px 12px; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.06); }
+
+    @media (max-width:540px){ .panel{ width:240px } .picker{ width:92% } }
   </style>
 </head>
 <body>
   <div id="game-container"></div>
 
-  <div class="hud" id="hud">
-    <h3>Палива (натисни щоб додати)</h3>
-    <div class="fuel-list" id="fuelList"></div>
-
-    <div class="controls">
-      <button id="igniteBtn" class="primary">Підпалити</button>
-      <button id="clearBtn" class="ghost">Очистити</button>
+  <div class="panel" id="panel">
+    <h3>Поточне паливо</h3>
+    <div id="currentList" style="min-height:64px; display:flex; flex-direction:column; gap:6px;">
+      <div style="color:#666;">Нічого не додано. Клацни по вогнищу, щоб додати.</div>
     </div>
-
     <div class="stat">CO₂: <span id="co2">0</span> т</div>
-    <div class="stat">Куля: <span id="radius">0</span> м</div>
+    <div class="stat">Радіус кулі: <span id="radius">0</span> м</div>
+  </div>
+
+  <div class="picker" id="picker">
+    <h4>Додати паливо</h4>
+    <div class="available" id="available"></div>
+    <div class="added">
+      <strong>Оберені:</strong>
+      <div id="picked" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap"></div>
+    </div>
   </div>
 
   <div class="scale" id="scale">
-    <div style="font-weight:700; margin-bottom:6px;">Порівняння масштабу</div>
-    <div class="marker" data-height="6">Людина <div class="bar" style="width:20px"></div></div>
-    <div class="marker" data-height="4">Автобус <div class="bar" style="width:36px"></div></div>
-    <div class="marker" data-height="12">Стовп ліхтаря <div class="bar" style="width:60px"></div></div>
-    <div class="marker" data-height="200">Хатинка <div class="bar" style="width:90px"></div></div>
-    <div class="marker" data-height="828">Дубайська вежа (Бурдж Халіфа) <div class="bar" style="width:120px"></div></div>
+    <div style="font-weight:700; margin-bottom:6px;">Масштаб (перевірка висоти)</div>
+    <div class="marker" data-height="2">Людина <span>2 м</span></div>
+    <div class="marker" data-height="4">Автобус <span>4 м</span></div>
+    <div class="marker" data-height="12">Стовп ліхтаря <span>12 м</span></div>
+    <div class="marker" data-height="50">Дерево <span>50 м</span></div>
+    <div class="marker" data-height="110">Біг-Бен <span>110 м</span></div>
+    <div class="marker" data-height="828">Бурдж Халіфа <span>828 м</span></div>
   </div>
 
-  <div class="help">Ідея: додавай паливо -> спали -> побачиш як куля з димом зростає. Натисни &quot;Очистити&quot; щоб почати спочатку.</div>
+  <div class="bottom-bar">
+    <div style="font-size:13px; color:#333;">Вогнище знаходиться в лісі. Додавай паливо і натискай:</div>
+    <button id="igniteBtn" class="ignite">Підпалити</button>
+  </div>
+
+  <div class="help">Клікни по вогнищу (на сцені), щоб відкрити панель додавання палива.</div>
 
 <script>
-// ----- Простий Phaser-прототип -----
+// --------- Конфіг та дані палива ----------
+const FUELS = [
+  { id:'wood', name:'Дрова', smoke:0.6, icon:'🪵' },
+  { id:'coal', name:'Вугілля', smoke:1.6, icon:'⚫' },
+  { id:'oil', name:'Нафта', smoke:3.8, icon:'🛢️' },
+  { id:'plastic', name:'Пластик', smoke:2.4, icon:'🧴' },
+  { id:'truck', name:'Фура', smoke:5.2, icon:'🚚' }
+];
+
+let pickedFuels = []; // список доданих предметів
+let co2Tonnes = 0;
+let atmosphereRadius = 120; // стартовий радіус кулі (пікселі) — незмінний базовий розмір
+let atmosphereTarget = atmosphereRadius; // коли додається дим, ціль росте
+let atmosphereGraphics, sceneRef;
+let markers = [];
+
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
   width: 420,
   height: 800,
-  backgroundColor: 0x87CEEB,
+  backgroundColor: 0x88c2a6,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: { preload, create, update }
 };
 const game = new Phaser.Game(config);
 
-let smokeValue = 0; // кількість "диму" що створено
-let atmosphereRadius = 0; // в пікселях на сцені
-let atmosphereTarget = 0;
-let atmosphereGraphics;
-let fireGroup;
-let itemsVisual = [];
-let co2Tonnes = 0;
-
-// визначення доступного палива
-const FUELS = [
-  { id:'wood', name:'Дрова', smoke:0.5, icon:'🪵' },
-  { id:'coal', name:'Вугілля', smoke:1.4, icon:'⚫' },
-  { id:'oil', name:'Нафта (танкер)', smoke:3.6, icon:'🛢️' },
-  { id:'plastic', name:'Пластик', smoke:2.2, icon:'🧴' },
-  { id:'truck', name:'Фура', smoke:5.0, icon:'🚚' }
-];
-
 function preload() {
-  // тут можна завантажити спрайти. Для простоти ми малюємо графікою
+  // можна додати спрайти пізніше
 }
 
 function create() {
-  const scene = this;
+  const scene = this; sceneRef = scene;
+  const cx = scene.cameras.main.centerX;
+  const cy = scene.cameras.main.centerY;
 
-  // місце для карактера і вогнища
-  const cx = this.cameras.main.centerX;
-  const groundY = 600;
+  // фон: небо -> дереви -> трава
+  scene.add.rectangle(cx, 0, 2000, 480, 0x87CEEB).setOrigin(0.5,0);
+  // нарисувати прості деревця рядами
+  const treeRowY = 420;
+  for(let i=-10;i<=10;i++){
+    const tx = cx + i*60 + (i%2?10:-10);
+    const trunk = scene.add.rectangle(tx, treeRowY+30, 12, 40, 0x7a4a2b).setOrigin(0.5);
+    const leaves = scene.add.circle(tx, treeRowY, 36, 0x1b8a47).setAlpha(0.95);
+  }
 
-  // фон земля
-  const ground = this.add.rectangle(cx, groundY+90, 900, 260, 0x6bbf59).setOrigin(0.5,0);
+  // трава
+  scene.add.rectangle(cx, 700, 2000, 220, 0x6bbf59).setOrigin(0.5,0);
 
-  // хлопець (сильно простий символ)
-  const boy = this.add.container(cx, groundY-20);
-  const body = this.add.rectangle(0,0,44,70,0x2c3e50).setOrigin(0.5);
-  const pack = this.add.rectangle(-8,6,28,34,0x8b5a2b).setOrigin(0.5);
-  boy.add([body, pack]);
-  boy.setSize(44,70);
-  boy.setInteractive({useHandCursor:true});
+  // вогнище (інтерактивне) внизу центру
+  const fireX = cx; const fireY = 620;
+  const fireBase = scene.add.ellipse(fireX, fireY+8, 120, 36, 0x3d2b1f).setAlpha(0.95);
+  const flame = scene.add.ellipse(fireX, fireY-10, 68, 68, 0xff6b35).setAlpha(0.95);
+  const fireHit = scene.add.circle(fireX, fireY, 86, 0xffffff, 0.001).setInteractive({useHandCursor:true});
+  fireHit.on('pointerdown', ()=> togglePicker());
 
-  // вогнище
-  fireGroup = this.add.container(cx, groundY+10);
-  const fireBase = this.add.ellipse(0,18,80,24,0x3d2b1f).setAlpha(0.9);
-  const flame = this.add.ellipse(0,-6,48,48,0xff6b35).setAlpha(0.9);
-  fireGroup.add([fireBase, flame]);
+  // Атмосфера (куля) центрована над вогнищем, але знаходиться вгорі
+  atmosphereGraphics = scene.add.graphics();
+  drawAtmosphere(scene);
 
-  // атмосфера (прозора куля над вогнищем)
-  atmosphereGraphics = this.add.graphics();
+  // side objects container — ми покажемо іконки коли перевищено
+  const sideX = scene.cameras.main.width - 110;
+  for(let i=0;i<6;i++){
+    const y = 160 + i*80;
+    const icon = scene.add.text(sideX, y, '', {fontSize:'20px'}).setOrigin(0.5).setAlpha(0);
+    markers.push(icon);
+  }
 
-  // interactivity: клік по хлопцю відкриває список додати паливо
-  boy.on('pointerdown', () => openFuelMenu());
+  // підпис
+  scene.add.text(18,18,'Eco Fire — лісовий прототип',{fontSize:'14px', color:'#042'});
 
-  // add small indicator items area
-  this.add.text(18,18,'Еко-гра прототип',{fontSize:'14px', color:'#042'});
-
-  // приклади предметів навколо
-  this.add.text(18,730,'Натисни на хлопця щоб додати паливо', {fontSize:'13px', color:'#333'});
-
-  // регистрація кнопок DOM
-  setupHUD(scene);
+  setupDOM();
 }
 
 function update(time, delta) {
-  // плавне збільшення атмосфери до цілі
+  // повільне збільшення кулі до цілі — вона росте і не зменшується
   if (atmosphereRadius < atmosphereTarget) {
-    atmosphereRadius += Math.min((atmosphereTarget - atmosphereRadius) * 0.08 + 0.6, 6);
-    drawAtmosphere(this);
-    updateHUD();
+    atmosphereRadius += Math.max(0.6, (atmosphereTarget - atmosphereRadius) * 0.06);
+    drawAtmosphere(sceneRef);
+    updateDOM();
+    checkMarkers();
   }
 }
 
-function drawAtmosphere(scene) {
+function drawAtmosphere(scene){
   atmosphereGraphics.clear();
   const cx = scene.cameras.main.centerX;
-  const cy = 300; // центр кулі вище
-  // зовнішнє коло (тонка границя)
+  const cy = 260; // фіксована висота кулі
+
+  // тонка границя кулі
   atmosphereGraphics.lineStyle(3, 0x222222, 0.25);
   atmosphereGraphics.strokeCircle(cx, cy, atmosphereRadius);
-  // заповнення димом (чорний з прозорістю який росте із smokeValue)
-  const alpha = Math.min(0.7, 0.05 + Math.log1p(smokeValue) * 0.12);
+
+  // заповнення димом (чорний з прозорістю залежить від co2Tonnes)
+  const alpha = Math.min(0.85, 0.08 + Math.log1p(co2Tonnes) * 0.12);
   atmosphereGraphics.fillStyle(0x000000, alpha);
-  atmosphereGraphics.fillCircle(cx, cy, atmosphereRadius * (0.8));
+  atmosphereGraphics.fillCircle(cx, cy, atmosphereRadius * 0.82);
 }
 
-// HUD / DOM interaction
-function setupHUD(scene) {
-  const fuelList = document.getElementById('fuelList');
-  fuelList.innerHTML = '';
+// --- DOM і взаємодія ---
+function setupDOM(){
+  const available = document.getElementById('available');
   FUELS.forEach(f => {
-    const btn = document.createElement('div');
-    btn.className = 'fuel-btn';
-    btn.innerHTML = `<div>${f.icon} &nbsp; ${f.name}</div><div>${f.smoke} d</div>`;
-    btn.onclick = () => addFuel(scene, f);
-    fuelList.appendChild(btn);
+    const el = document.createElement('div'); el.className='chip'; el.innerText = `${f.icon} ${f.name}`;
+    el.onclick = ()=> addPicked(f);
+    available.appendChild(el);
   });
 
-  document.getElementById('igniteBtn').onclick = () => ignite(scene);
-  document.getElementById('clearBtn').onclick = () => resetScene(scene);
+  document.getElementById('igniteBtn').onclick = ()=> ignite();
 }
 
-function addFuel(scene, fuel) {
-  // візуально показати предмет біля вогнища
-  const ix = scene.cameras.main.centerX + (Math.random()*80 - 40);
-  const iy = 540 + (Math.random()*16 - 8);
-  const g = scene.add.text(ix, iy, fuel.icon, {fontSize:'28px'}).setOrigin(0.5);
-  itemsVisual.push(g);
-  // накопичуємо димовий внесок
-  smokeValue += fuel.smoke;
-  // збільшуємо CO2 (проста модель), припустимо smokeValue тонн * коефіцієнт
-  co2Tonnes += fuel.smoke * 0.12;
-  document.getElementById('co2').innerText = co2Tonnes.toFixed(2);
-  document.getElementById('radius').innerText = Math.round(atmosphereRadius);
+function togglePicker(){
+  const p = document.getElementById('picker');
+  p.classList.toggle('open');
 }
 
-function ignite(scene) {
-  if (smokeValue <= 0) return alert('Спершу додайте паливо! Натисніть на хлопця.');
-  // визначаємо цільовий розмір кулі у "метрах" умовно — масштабуємо
-  // для наочного прикладу: кожен пункт smoke -> 40 пікселів
-  atmosphereTarget = atmosphereRadius + smokeValue * 40 + 60;
-  // коли підпалено, спалили - скидаємо запас
-  smokeValue = 0;
-  // підкреслити рівні у scale
-  highlightScaleMarkers(atmosphereTarget);
+function addPicked(fuel){
+  pickedFuels.push(fuel);
+  co2Tonnes += fuel.smoke * 0.12; // умовна модель
+  // оновити DOM списку обраних
+  renderPicked();
+  updateDOM();
 }
 
-function resetScene(scene) {
-  // видаляємо візуальні предмети
-  itemsVisual.forEach(i => i.destroy());
-  itemsVisual = [];
-  smokeValue = 0;
-  atmosphereRadius = 0;
-  atmosphereTarget = 0;
-  co2Tonnes = 0;
-  document.getElementById('co2').innerText = co2Tonnes.toFixed(2);
-  document.getElementById('radius').innerText = Math.round(atmosphereRadius);
-  atmosphereGraphics.clear();
-  // видалити підсвітку маркерів
-  document.querySelectorAll('.scale .marker').forEach(m => m.classList.remove('high'));
-}
+function renderPicked(){
+  const picked = document.getElementById('picked'); picked.innerHTML = '';
+  const cur = document.getElementById('currentList'); cur.innerHTML = '';
+  if (pickedFuels.length===0){ cur.innerHTML = '<div style="color:#666">Нічого не додано. Клацни по вогнищу.</div>'; }
+  pickedFuels.forEach((f, idx)=>{
+    const chip = document.createElement('div'); chip.className='chip'; chip.innerText = `${f.icon} ${f.name}`;
+    chip.onclick = ()=> removePicked(idx);
+    picked.appendChild(chip);
 
-function updateHUD() {
-  document.getElementById('radius').innerText = Math.round(atmosphereRadius);
-}
-
-function highlightScaleMarkers(radiusPixels) {
-  // ми конвертуємо пікселі до уявних метрів за простим коефіцієнтом
-  // тут 1 піксель = 2 метри (умовно) — можна змінити
-  const pxToM = 2;
-  const meter = radiusPixels * pxToM;
-  const markers = document.querySelectorAll('.scale .marker');
-  markers.forEach(m => {
-    const h = Number(m.getAttribute('data-height'));
-    if (meter >= h) m.classList.add('high');
-    else m.classList.remove('high');
+    const row = document.createElement('div'); row.className='fuel-item'; row.innerHTML = `<div>${f.icon} ${f.name}</div><div>${f.smoke} d</div>`;
+    cur.appendChild(row);
   });
 }
 
-function openFuelMenu() {
-  // простий UX: підсвітити список (вже видно)
-  const el = document.getElementById('hud');
-  // дрібна анімація
-  document.querySelector('.hud').style.transform = 'scale(1.02)';
-  setTimeout(()=>document.querySelector('.hud').style.transform = 'none', 200);
+function removePicked(i){
+  const f = pickedFuels.splice(i,1)[0];
+  co2Tonnes = Math.max(0, co2Tonnes - f.smoke * 0.12);
+  renderPicked(); updateDOM();
 }
+
+function ignite(){
+  if (pickedFuels.length===0) return alert('Немає палива — додай хоч щось, клікнувши по вогнищу.');
+  // сукупний внесок smoke
+  const totalSmoke = pickedFuels.reduce((s,f)=>s+f.smoke,0);
+  // меппінг: кожен smoke одиниця дає +60 пікселів
+  const addPixels = totalSmoke * 60;
+  atmosphereTarget = Math.max(atmosphereTarget, atmosphereRadius + addPixels);
+  // після підпалу — список очищається, але куля не зменшується
+  pickedFuels = [];
+  renderPicked();
+  updateDOM();
+}
+
+function updateDOM(){
+  document.getElementById('co2').innerText = co2Tonnes.toFixed(2);
+  // умовний перетворювач піксі в метри — 1 піксель = 2 метри
+  const meters = Math.round(atmosphereRadius * 2);
+  document.getElementById('radius').innerText = meters;
+}
+
+function checkMarkers(){
+  // якщо куля (у метрах) перевищила значення маркера — показати іконку
+  const meters = atmosphereRadius * 2;
+  const markerDefs = [ {h:2,icon:'🚶'}, {h:4,icon:'🚌'}, {h:12,icon:'💡'}, {h:50,icon:'🌲'}, {h:110,icon:'🕰️'}, {h:828,icon:'🗼'} ];
+  markerDefs.forEach((m, i)=>{
+    const txt = markers[i];
+    if (meters >= m.h && txt.alpha===0){
+      txt.setText(`${m.icon} ${m.h}m`).setAlpha(1).setScale(0.9).setOrigin(0.5);
+      // плавна анімація появи
+      sceneRef.tweens.add({ targets: txt, scale:1.15, duration:400, yoyo:true });
+      // підсвітити відповідний scale маркер в DOM
+      const domMarkers = document.querySelectorAll('.scale .marker');
+      if (domMarkers[i]) domMarkers[i].classList.add('high');
+    }
+  });
+}
+
 </script>
 </body>
 </html>
