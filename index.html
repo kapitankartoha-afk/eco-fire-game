@@ -1,269 +1,169 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Eco Fire — оновлений прототип</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <meta charset="UTF-8">
+  <title>Повітряна Куля</title>
   <style>
-    :root{--glass: rgba(255,255,255,0.85); --accent:#2b8aef}
-    html,body { height:100%; margin:0; font-family:Inter, system-ui, Arial; background: linear-gradient(180deg,#88c2a6 0%, #e6f7ff 100%); }
-    #game-container { width:100%; height:100vh; display:flex; align-items:center; justify-content:center; position:relative; }
-    canvas { display:block; border-radius:16px; box-shadow:0 12px 40px rgba(10,20,30,0.15); }
-
-    /* HUD */
-    .panel { position:absolute; right:18px; top:18px; width:300px; background:var(--glass); border-radius:12px; padding:12px; box-shadow:0 8px 30px rgba(0,0,0,0.12); }
-    .panel h3{margin:0 0 8px 0}
-    .fuel-list { display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
-    .fuel-item { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-radius:8px; cursor:pointer; border:1px solid rgba(0,0,0,0.06); background:#fff; }
-    .controls { margin-top:10px; display:flex; gap:8px; }
-    button.primary { background:var(--accent); color:#fff; padding:8px 10px; border-radius:8px; border:none; cursor:pointer; }
-    button.ghost { background:transparent; border:1px solid rgba(0,0,0,0.08); padding:8px 10px; border-radius:8px; cursor:pointer; }
-    .stat { margin-top:10px; font-size:14px; }
-
-    /* bottom bar with ignite button */
-    .bottom-bar { position:absolute; left:50%; transform:translateX(-50%); bottom:28px; background:var(--glass); padding:10px 14px; border-radius:999px; display:flex; gap:10px; align-items:center; box-shadow:0 10px 30px rgba(0,0,0,0.12); }
-    .ignite { background:#e74c3c; color:#fff; border:none; padding:10px 18px; border-radius:999px; cursor:pointer; font-weight:700 }
-
-    /* side markers */
-    .scale { position:absolute; left:18px; top:18px; width:220px; background:var(--glass); border-radius:12px; padding:10px; box-shadow:0 6px 24px rgba(0,0,0,0.08); }
-    .scale .marker { font-size:13px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; }
-    .marker.high { font-weight:700; color:#c0392b; }
-
-    /* modal-like fuel picker (desktop) */
-    .picker { position:absolute; left:50%; transform:translateX(-50%); top:60px; background:var(--glass); width:360px; border-radius:12px; padding:12px; display:none; box-shadow:0 18px 40px rgba(0,0,0,0.18); }
-    .picker.open{ display:block }
-    .picker h4{margin:0 0 8px}
-    .picker .available { display:flex; gap:8px; flex-wrap:wrap }
-    .chip{ padding:8px 10px; background:#fff; border-radius:10px; border:1px solid rgba(0,0,0,0.06); cursor:pointer }
-    .picker .added { margin-top:10px }
-
-    /* small help */
-    .help { position:absolute; right:18px; bottom:18px; background:var(--glass); padding:8px 12px; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.06); }
-
-    @media (max-width:540px){ .panel{ width:240px } .picker{ width:92% } }
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #addPanel {
+      display: none;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    #igniteBtn {
+      padding: 10px 20px;
+      background: orange;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
-  <div id="game-container"></div>
-
-  <div class="panel" id="panel">
-    <h3>Поточне паливо</h3>
-    <div id="currentList" style="min-height:64px; display:flex; flex-direction:column; gap:6px;">
-      <div style="color:#666;">Нічого не додано. Клацни по вогнищу, щоб додати.</div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="controls">
+    <div id="addPanel">
+      <p>Додати речовину:</p>
+      <button onclick="addFuel('Дрова')">Дрова</button>
+      <button onclick="addFuel('Бензин')">Бензин</button>
+      <button onclick="addFuel('Сміття')">Сміття</button>
     </div>
-    <div class="stat">CO₂: <span id="co2">0</span> т</div>
-    <div class="stat">Радіус кулі: <span id="radius">0</span> м</div>
+    <button id="igniteBtn" onclick="ignite()">Підпалити</button>
   </div>
+  
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-  <div class="picker" id="picker">
-    <h4>Додати паливо</h4>
-    <div class="available" id="available"></div>
-    <div class="added">
-      <strong>Оберені:</strong>
-      <div id="picked" style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap"></div>
-    </div>
-  </div>
+    let fireX = canvas.width / 2;
+    let fireY = canvas.height - 80;
+    let balloonY = canvas.height - 200;
+    let rising = false;
+    let fuels = [];
+    let height = 0;
 
-  <div class="scale" id="scale">
-    <div style="font-weight:700; margin-bottom:6px;">Масштаб (перевірка висоти)</div>
-    <div class="marker" data-height="2">Людина <span>2 м</span></div>
-    <div class="marker" data-height="4">Автобус <span>4 м</span></div>
-    <div class="marker" data-height="12">Стовп ліхтаря <span>12 м</span></div>
-    <div class="marker" data-height="50">Дерево <span>50 м</span></div>
-    <div class="marker" data-height="110">Біг-Бен <span>110 м</span></div>
-    <div class="marker" data-height="828">Бурдж Халіфа <span>828 м</span></div>
-  </div>
+    const landmarks = [
+      { h: 300, name: "Дерева" },
+      { h: 600, name: "Будинок" },
+      { h: 1000, name: "Біг-Бен" },
+      { h: 2000, name: "Ейфелева вежа" },
+      { h: 8848, name: "Еверест" }
+    ];
+    let shownLandmarks = [];
 
-  <div class="bottom-bar">
-    <div style="font-size:13px; color:#333;">Вогнище знаходиться в лісі. Додавай паливо і натискай:</div>
-    <button id="igniteBtn" class="ignite">Підпалити</button>
-  </div>
+    function drawBackground() {
+      // Небо
+      let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, "#87CEEB");
+      gradient.addColorStop(1, "#ffffff");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  <div class="help">Клікни по вогнищу (на сцені), щоб відкрити панель додавання палива.</div>
+      // Трава
+      ctx.fillStyle = "#228B22";
+      ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
 
-<script>
-// --------- Конфіг та дані палива ----------
-const FUELS = [
-  { id:'wood', name:'Дрова', smoke:0.6, icon:'🪵' },
-  { id:'coal', name:'Вугілля', smoke:1.6, icon:'⚫' },
-  { id:'oil', name:'Нафта', smoke:3.8, icon:'🛢️' },
-  { id:'plastic', name:'Пластик', smoke:2.4, icon:'🧴' },
-  { id:'truck', name:'Фура', smoke:5.2, icon:'🚚' }
-];
-
-let pickedFuels = []; // список доданих предметів
-let co2Tonnes = 0;
-let atmosphereRadius = 120; // стартовий радіус кулі (пікселі) — незмінний базовий розмір
-let atmosphereTarget = atmosphereRadius; // коли додається дим, ціль росте
-let atmosphereGraphics, sceneRef;
-let markers = [];
-
-const config = {
-  type: Phaser.AUTO,
-  parent: 'game-container',
-  width: 420,
-  height: 800,
-  backgroundColor: 0x88c2a6,
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: { preload, create, update }
-};
-const game = new Phaser.Game(config);
-
-function preload() {
-  // можна додати спрайти пізніше
-}
-
-function create() {
-  const scene = this; sceneRef = scene;
-  const cx = scene.cameras.main.centerX;
-  const cy = scene.cameras.main.centerY;
-
-  // фон: небо -> дереви -> трава
-  scene.add.rectangle(cx, 0, 2000, 480, 0x87CEEB).setOrigin(0.5,0);
-  // нарисувати прості деревця рядами
-  const treeRowY = 420;
-  for(let i=-10;i<=10;i++){
-    const tx = cx + i*60 + (i%2?10:-10);
-    const trunk = scene.add.rectangle(tx, treeRowY+30, 12, 40, 0x7a4a2b).setOrigin(0.5);
-    const leaves = scene.add.circle(tx, treeRowY, 36, 0x1b8a47).setAlpha(0.95);
-  }
-
-  // трава
-  scene.add.rectangle(cx, 700, 2000, 220, 0x6bbf59).setOrigin(0.5,0);
-
-  // вогнище (інтерактивне) внизу центру
-  const fireX = cx; const fireY = 620;
-  const fireBase = scene.add.ellipse(fireX, fireY+8, 120, 36, 0x3d2b1f).setAlpha(0.95);
-  const flame = scene.add.ellipse(fireX, fireY-10, 68, 68, 0xff6b35).setAlpha(0.95);
-  const fireHit = scene.add.circle(fireX, fireY, 86, 0xffffff, 0.001).setInteractive({useHandCursor:true});
-  fireHit.on('pointerdown', ()=> togglePicker());
-
-  // Атмосфера (куля) центрована над вогнищем, але знаходиться вгорі
-  atmosphereGraphics = scene.add.graphics();
-  drawAtmosphere(scene);
-
-  // side objects container — ми покажемо іконки коли перевищено
-  const sideX = scene.cameras.main.width - 110;
-  for(let i=0;i<6;i++){
-    const y = 160 + i*80;
-    const icon = scene.add.text(sideX, y, '', {fontSize:'20px'}).setOrigin(0.5).setAlpha(0);
-    markers.push(icon);
-  }
-
-  // підпис
-  scene.add.text(18,18,'Eco Fire — лісовий прототип',{fontSize:'14px', color:'#042'});
-
-  setupDOM();
-}
-
-function update(time, delta) {
-  // повільне збільшення кулі до цілі — вона росте і не зменшується
-  if (atmosphereRadius < atmosphereTarget) {
-    atmosphereRadius += Math.max(0.6, (atmosphereTarget - atmosphereRadius) * 0.06);
-    drawAtmosphere(sceneRef);
-    updateDOM();
-    checkMarkers();
-  }
-}
-
-function drawAtmosphere(scene){
-  atmosphereGraphics.clear();
-  const cx = scene.cameras.main.centerX;
-  const cy = 260; // фіксована висота кулі
-
-  // тонка границя кулі
-  atmosphereGraphics.lineStyle(3, 0x222222, 0.25);
-  atmosphereGraphics.strokeCircle(cx, cy, atmosphereRadius);
-
-  // заповнення димом (чорний з прозорістю залежить від co2Tonnes)
-  const alpha = Math.min(0.85, 0.08 + Math.log1p(co2Tonnes) * 0.12);
-  atmosphereGraphics.fillStyle(0x000000, alpha);
-  atmosphereGraphics.fillCircle(cx, cy, atmosphereRadius * 0.82);
-}
-
-// --- DOM і взаємодія ---
-function setupDOM(){
-  const available = document.getElementById('available');
-  FUELS.forEach(f => {
-    const el = document.createElement('div'); el.className='chip'; el.innerText = `${f.icon} ${f.name}`;
-    el.onclick = ()=> addPicked(f);
-    available.appendChild(el);
-  });
-
-  document.getElementById('igniteBtn').onclick = ()=> ignite();
-}
-
-function togglePicker(){
-  const p = document.getElementById('picker');
-  p.classList.toggle('open');
-}
-
-function addPicked(fuel){
-  pickedFuels.push(fuel);
-  co2Tonnes += fuel.smoke * 0.12; // умовна модель
-  // оновити DOM списку обраних
-  renderPicked();
-  updateDOM();
-}
-
-function renderPicked(){
-  const picked = document.getElementById('picked'); picked.innerHTML = '';
-  const cur = document.getElementById('currentList'); cur.innerHTML = '';
-  if (pickedFuels.length===0){ cur.innerHTML = '<div style="color:#666">Нічого не додано. Клацни по вогнищу.</div>'; }
-  pickedFuels.forEach((f, idx)=>{
-    const chip = document.createElement('div'); chip.className='chip'; chip.innerText = `${f.icon} ${f.name}`;
-    chip.onclick = ()=> removePicked(idx);
-    picked.appendChild(chip);
-
-    const row = document.createElement('div'); row.className='fuel-item'; row.innerHTML = `<div>${f.icon} ${f.name}</div><div>${f.smoke} d</div>`;
-    cur.appendChild(row);
-  });
-}
-
-function removePicked(i){
-  const f = pickedFuels.splice(i,1)[0];
-  co2Tonnes = Math.max(0, co2Tonnes - f.smoke * 0.12);
-  renderPicked(); updateDOM();
-}
-
-function ignite(){
-  if (pickedFuels.length===0) return alert('Немає палива — додай хоч щось, клікнувши по вогнищу.');
-  // сукупний внесок smoke
-  const totalSmoke = pickedFuels.reduce((s,f)=>s+f.smoke,0);
-  // меппінг: кожен smoke одиниця дає +60 пікселів
-  const addPixels = totalSmoke * 60;
-  atmosphereTarget = Math.max(atmosphereTarget, atmosphereRadius + addPixels);
-  // після підпалу — список очищається, але куля не зменшується
-  pickedFuels = [];
-  renderPicked();
-  updateDOM();
-}
-
-function updateDOM(){
-  document.getElementById('co2').innerText = co2Tonnes.toFixed(2);
-  // умовний перетворювач піксі в метри — 1 піксель = 2 метри
-  const meters = Math.round(atmosphereRadius * 2);
-  document.getElementById('radius').innerText = meters;
-}
-
-function checkMarkers(){
-  // якщо куля (у метрах) перевищила значення маркера — показати іконку
-  const meters = atmosphereRadius * 2;
-  const markerDefs = [ {h:2,icon:'🚶'}, {h:4,icon:'🚌'}, {h:12,icon:'💡'}, {h:50,icon:'🌲'}, {h:110,icon:'🕰️'}, {h:828,icon:'🗼'} ];
-  markerDefs.forEach((m, i)=>{
-    const txt = markers[i];
-    if (meters >= m.h && txt.alpha===0){
-      txt.setText(`${m.icon} ${m.h}m`).setAlpha(1).setScale(0.9).setOrigin(0.5);
-      // плавна анімація появи
-      sceneRef.tweens.add({ targets: txt, scale:1.15, duration:400, yoyo:true });
-      // підсвітити відповідний scale маркер в DOM
-      const domMarkers = document.querySelectorAll('.scale .marker');
-      if (domMarkers[i]) domMarkers[i].classList.add('high');
+      // Дерева
+      for (let i = 0; i < 8; i++) {
+        let x = i * 150 + 50;
+        ctx.fillStyle = "#8B4513";
+        ctx.fillRect(x, canvas.height - 120, 20, 60);
+        ctx.beginPath();
+        ctx.arc(x + 10, canvas.height - 140, 40, 0, Math.PI * 2);
+        ctx.fillStyle = "#006400";
+        ctx.fill();
+      }
     }
-  });
-}
 
-</script>
+    function drawFire() {
+      ctx.beginPath();
+      ctx.arc(fireX, fireY, 30, 0, Math.PI * 2);
+      ctx.fillStyle = "orange";
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function drawBalloon() {
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, balloonY, 50, 0, Math.PI * 2);
+      ctx.fillStyle = "red";
+      ctx.fill();
+
+      ctx.fillStyle = "brown";
+      ctx.fillRect(canvas.width / 2 - 20, balloonY + 50, 40, 30);
+    }
+
+    function drawLandmarks() {
+      ctx.fillStyle = "black";
+      ctx.font = "20px Arial";
+      landmarks.forEach(l => {
+        if (height >= l.h && !shownLandmarks.includes(l.name)) {
+          ctx.fillText(l.name, 50, canvas.height - 100 - shownLandmarks.length * 30);
+          shownLandmarks.push(l.name);
+        }
+      });
+    }
+
+    function update() {
+      if (rising) {
+        balloonY -= 1;
+        height += 10;
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground();
+      drawFire();
+      drawBalloon();
+      drawLandmarks();
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    canvas.addEventListener('click', () => {
+      document.getElementById('addPanel').style.display = 'block';
+    });
+
+    function addFuel(type) {
+      fuels.push(type);
+      alert(type + " додано!");
+    }
+
+    function ignite() {
+      if (fuels.length > 0) {
+        rising = true;
+      } else {
+        alert("Додайте речовини, щоб підпалити!");
+      }
+    }
+
+  </script>
 </body>
 </html>
